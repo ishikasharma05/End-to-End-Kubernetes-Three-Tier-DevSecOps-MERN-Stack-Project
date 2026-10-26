@@ -1,5 +1,8 @@
 pipeline {
     agent any
+    parameters {
+        booleanParam(name: 'RUN_DEPCHECK', defaultValue: false, description: 'Run OWASP Dependency-Check (needs the NVD database already downloaded)')
+    }
     tools {
         jdk 'jdk'
         nodejs 'nodejs'
@@ -52,6 +55,7 @@ pipeline {
             }
         }
         stage('OWASP Dependency-Check') {
+            when { expression { params.RUN_DEPCHECK } }
             steps {
                 catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
                     timeout(time: 40, unit: 'MINUTES') {
