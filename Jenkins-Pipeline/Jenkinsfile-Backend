@@ -1,0 +1,108 @@
+pipeline {
+    agent any
+    tools {
+        jdk 'jdk'
+        nodejs 'nodejs'
+    }
+    environment {
+        SCANNER_HOME       = tool 'sonar-scanner'
+        AWS_DEFAULT_REGION = 'ap-south-1'
+        AWS_ACCOUNT_ID     = credentials('ACCOUNT_ID')
+        ECR_REPO           = credentials('ECR_REPO2')
+        REGISTRY           = "${AWS_ACCOUNT_ID}.dkr.ecr.ap-south-1.amazonaws.com"
+        GIT_REPO           = 'End-to-End-Kubernetes-Three-Tier-DevSecOps-MERN-Stack-Project'
+        GIT_USER_NAME      = 'ishikasharma05'
+        APP_DIR            = 'Application-Code/backend'
+        MANIFEST_DIR       = 'Kubernetes-Manifests/Backend'
+        SONAR_PROJECT      = 'three-tier-backend'
+    }
+    stages {
+        stage('Cleaning Workspace') {
+            steps { deleteDir() }
+        }
+        stage('Checkout from Git') {
+            steps {
+                git branch: 'main', credentialsId: 'github',
+                    url: "https://github.com/${GIT_USER_NAME}/${GIT_REPO}.git"
+            }
+        }
+        stage('SonarQube Analysis') {
+            steps {
+                dir("${APP_DIR}") {
+                    withSonarQubeEnv('sonar-server') {
+                        sh '''$SCANNER_HOME/bin/sonar-scanner \
+                          -Dsonar.projectName=$SONAR_PROJECT \
+                          -Dsonar.projectKey=$SONAR_PROJECT \
+                          -Dsonar.sources=. \
+                          -Dsonar.exclusions=node_modules/**'''
+                    }
+                }
+            }
+        }
+        stage('Quality Gate') {
+            steps {
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: false, credentialsId: 'sonar-token'
+                }
+            }
+        }
+        stage('Install Dependencies') {
+            steps {
+                dir("${APP_DIR}") { sh 'npm install' }
+            }
+        }
+        stage('OWASP Dependency-Check') {
+            steps {
+                catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+                    timeout(time: 40, unit: 'MINUTES') {
+                        dependencyCheck additionalArguments: "--scan ./${APP_DIR} --disableYarnAudit --disableNodeAudit", odcInstallation: 'DP-Check'
+                        dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+                    }
+                }
+            }
+        }
+        stage('Trivy File Scan') {
+            steps {
+                sh 'trivy fs --exit-code 0 --severity HIGH,CRITICAL ${APP_DIR} > trivyfs.txt || true'
+                sh 'tail -n 20 trivyfs.txt'
+            }
+        }
+        stage('Docker Image Build') {
+            steps {
+                dir("${APP_DIR}") {
+                    sh 'docker build -t $REGISTRY/$ECR_REPO:$BUILD_NUMBER .'
+                }
+            }
+        }
+        stage('Push to ECR') {
+            steps {
+                sh 'aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $REGISTRY'
+                sh 'docker push $REGISTRY/$ECR_REPO:$BUILD_NUMBER'
+            }
+        }
+        stage('Trivy Image Scan') {
+            steps {
+                sh 'trivy image --exit-code 0 --severity HIGH,CRITICAL $REGISTRY/$ECR_REPO:$BUILD_NUMBER > trivyimage.txt || true'
+                sh 'tail -n 20 trivyimage.txt'
+            }
+        }
+        stage('Update Deployment File') {
+            when { expression { fileExists("${MANIFEST_DIR}/deployment.yaml") } }
+            steps {
+                dir("${MANIFEST_DIR}") {
+                    withCredentials([usernamePassword(credentialsId: 'github', usernameVariable: 'GH_USER', passwordVariable: 'GH_TOKEN')]) {
+                        sh '''
+                          git config user.email "ishikasharma05@users.noreply.github.com"
+                          git config user.name "ishikasharma05"
+                          sed -i "s#image: .*#image: $REGISTRY/$ECR_REPO:$BUILD_NUMBER#" deployment.yaml
+                          git add deployment.yaml
+                          git commit -m "Update backend image to build $BUILD_NUMBER" || echo "nothing to commit"
+                          git pull --rebase https://$GH_USER:$GH_TOKEN@github.com/$GIT_USER_NAME/$GIT_REPO.git main
+                          git push https://$GH_USER:$GH_TOKEN@github.com/$GIT_USER_NAME/$GIT_REPO.git HEAD:main
+                        '''
+                    }
+                }
+            }
+        }
+    }
+}
