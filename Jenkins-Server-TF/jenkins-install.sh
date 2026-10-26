@@ -3,10 +3,10 @@ set -x
 export DEBIAN_FRONTEND=noninteractive
 
 apt-get update -y
-apt-get install -y fontconfig openjdk-17-jre unzip curl gnupg wget apt-transport-https lsb-release software-properties-common
+apt-get install -y fontconfig openjdk-21-jre unzip curl gnupg wget apt-transport-https lsb-release software-properties-common
 
 # Jenkins (check the key URL against jenkins.io/doc/book/installing/linux if this step fails)
-wget -O /usr/share/keyrings/jenkins-keyring.asc https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key
+wget -O /usr/share/keyrings/jenkins-keyring.asc https://pkg.jenkins.io/debian-stable/jenkins.io-2026.key
 echo "deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] https://pkg.jenkins.io/debian-stable binary/" > /etc/apt/sources.list.d/jenkins.list
 apt-get update -y
 apt-get install -y jenkins
@@ -47,6 +47,8 @@ apt-get update -y
 apt-get install -y trivy
 
 # SonarQube
+sysctl -w vm.max_map_count=524288
+sysctl -w fs.file-max=131072
 docker run -d --name sonarqube --restart unless-stopped -p 9000:9000 sonarqube:lts-community
 
 systemctl restart jenkins
