@@ -55,7 +55,9 @@ pipeline {
             steps {
                 catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
                     timeout(time: 40, unit: 'MINUTES') {
-                        dependencyCheck additionalArguments: "--scan ./${APP_DIR} --disableYarnAudit --disableNodeAudit", odcInstallation: 'DP-Check'
+                        withCredentials([string(credentialsId: 'nvd-api-key', variable: 'NVD_KEY')]) {
+                            dependencyCheck additionalArguments: '--scan ./' + env.APP_DIR + ' --disableYarnAudit --disableNodeAudit --nvdApiKey ' + NVD_KEY, odcInstallation: 'DP-Check'
+                        }
                         dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
                     }
                 }
