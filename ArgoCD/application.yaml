@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: three-tier
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/ishikasharma05/End-to-End-Kubernetes-Three-Tier-DevSecOps-MERN-Stack-Project.git
+    targetRevision: main
+    path: Kubernetes-Manifests
+    directory:
+      recurse: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: three-tier
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
