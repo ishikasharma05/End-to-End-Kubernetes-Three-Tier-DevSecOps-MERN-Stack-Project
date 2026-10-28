@@ -182,13 +182,23 @@ cd EKS-TF && terraform destroy
 Add your screenshots to `docs/screenshots/` and reference them here, for example:
 
 - Jenkins stage views for both pipelines
+<img width="888" height="327" alt="Screenshot 2026-10-28 124141" src="https://github.com/user-attachments/assets/574e82ae-74dd-415d-8a17-a87667fb954a" />
+
 
 - SonarQube project dashboards
+<img width="872" height="362" alt="Screenshot 2026-10-28 124232" src="https://github.com/user-attachments/assets/665e4db7-ed5b-411f-8f4d-950f0916df60" />
+
 
 - `kubectl get nodes` and `kubectl get pods,svc,pvc,ingress -n three-tier`
-- The running application
-- ArgoCD application tree
+<img width="583" height="101" alt="Screenshot 2026-10-28 124632" src="https://github.com/user-attachments/assets/0417e4d1-6f12-4d47-a547-34d64db7f60e" />
+<img width="593" height="136" alt="Screenshot 2026-10-28 124644" src="https://github.com/user-attachments/assets/c69fd553-e544-4171-8601-7da860fcb212" />
+
+- ArgoCD 
+<img width="715" height="407" alt="Screenshot 2026-10-28 124545" src="https://github.com/user-attachments/assets/f2825a4b-5b2a-43d3-a4e1-4edc06d0bf1b" />
+
 - Grafana dashboard 
+<img width="643" height="463" alt="Screenshot 2026-10-28 124959" src="https://github.com/user-attachments/assets/a0b37f7c-427f-4cc3-97b2-117a3ddf6d3b" />
+
 
 ## Author
 
