@@ -103,7 +103,7 @@ pipeline {
                           sed -i "s#image: .*#image: $REGISTRY/$ECR_REPO:$BUILD_NUMBER#" deployment.yaml
                           git add deployment.yaml
                           git commit -m "Update frontend image to build $BUILD_NUMBER" || echo "nothing to commit"
-                          git pull --rebase https://$GH_USER:$GH_TOKEN@github.com/$GIT_USER_NAME/$GIT_REPO.git main
+                          git pull --rebase --autostash https://$GH_USER:$GH_TOKEN@github.com/$GIT_USER_NAME/$GIT_REPO.git main
                           git push https://$GH_USER:$GH_TOKEN@github.com/$GIT_USER_NAME/$GIT_REPO.git HEAD:main
                         '''
                     }
