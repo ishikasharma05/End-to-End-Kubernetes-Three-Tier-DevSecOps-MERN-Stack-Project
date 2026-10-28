@@ -22,11 +22,221 @@ A three-tier web application (ReactJS frontend, NodeJS backend, MongoDB database
 
 ## Architecture and flow
 
-1. A Jenkins pipeline checks out the code, runs SonarQube analysis and the Quality Gate, installs dependencies, runs Trivy on the files, builds the Docker image, pushes it to ECR, and scans the pushed image with Trivy.
-2. The last pipeline stage edits the image tag in `Kubernetes-Manifests/<tier>/deployment.yaml` and pushes that commit to GitHub.
-3. ArgoCD detects the new commit and rolls the new image out to the `three-tier` namespace, with automated sync, prune and self-heal enabled.
-4. Users reach the app through an Application Load Balancer. The Ingress sends `/api` to the backend and everything else to the frontend.
-5. Prometheus scrapes the cluster, Grafana shows the dashboards, and a `PrometheusRule` alerts when the backend drops below two available replicas.
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1700 1090" width="1700" height="1090" font-family="DejaVu Sans, Arial, Helvetica, sans-serif" xmlns:c2pa="http://c2pa.org/manifest"><metadata><c2pa:manifest>AAAWgmp1bWIAAAAeanVtZGMycGEAEQAQgAAAqgA4m3EDYzJwYQAAABZcanVtYgAAAEdqdW1kYzJtYQARABCAAACqADibcQN1cm46YzJwYTpiNzNkOTdkZC1jYTE1LTQyMTEtOThmOC0xNGMyYmRkYzRlMjAAAAADl2p1bWIAAAApanVtZGMyYXMAEQAQgAAAqgA4m3EDYzJwYS5hc3NlcnRpb25zAAAAALxqdW1iAAAARGp1bWRjYm9yABEAEIAAAKoAOJtxE2MycGEuaW5ncmVkaWVudC52MwAAAAAYYzJzaJqiBXSbeAbe2vX09bH/M/wAAABwY2JvcqNpZGM6Zm9ybWF0bWltYWdlL3N2Zyt4bWxqaW5zdGFuY2VJRHgseG1wOmlpZDpkMTYwY2JlYy1kYWJjLTQ5ODAtYjU1NC1jYmM5YTM4NDEzY2NscmVsYXRpb25zaGlwaHBhcmVudE9mAAAB4mp1bWIAAABBanVtZGNib3IAEQAQgAAAqgA4m3ETYzJwYS5hY3Rpb25zLnYyAAAAABhjMnNoVP8DXnQGHQku/P5gG3wSgQAAAZljYm9yomdhY3Rpb25zgqJmYWN0aW9ua2MycGEub3BlbmVkanBhcmFtZXRlcnOha2luZ3JlZGllbnRzgaJjdXJseC1zZWxmI2p1bWJmPWMycGEuYXNzZXJ0aW9ucy9jMnBhLmluZ3JlZGllbnQudjNkaGFzaFggFwiThDXv9bdItbr7JoVF6BWuCUCjYVM/SaDewBwFMQakZmFjdGlvbngdY29tLmFudGhyb3BpYy5jbGF1ZGUucHJvdmlkZWRqcGFyYW1ldGVyc6F4H2NvbS5hbnRocm9waWMub3JpZ2luLWNvbmZpZGVuY2VndW5rbm93bmtkZXNjcmlwdGlvbnhmQ2xhdWRlIHByb3ZpZGVkIHRoaXMgZmlsZSBhdCB0aGUgcmVxdWVzdCBvZiBhIHVzZXIgYW5kIG1heSBoYXZlIGNyZWF0ZWQgb3IgbW9kaWZpZWQgdGhlIGZpbGUgY29udGVudHMubXNvZnR3YXJlQWdlbnShZG5hbWVmQ2xhdWRlcmFsbEFjdGlvbnNJbmNsdWRlZPUAAADIanVtYgAAAEBqdW1kY2JvcgARABCAAACqADibcRNjMnBhLmhhc2guZGF0YQAAAAAYYzJzaNtDtKJIuBbTqzC59+saCi4AAACAY2JvcqVjYWxnZnNoYTI1NmNwYWRNAAAAAAAAAAAAAAAAAGRoYXNoWCChf1eL6IEAlNZD3i/HoD/5KbKdBZ3l2hum0aq/WzQ6d2RuYW1lbmp1bWJmIG1hbmlmZXN0amV4Y2x1c2lvbnOBomVzdGFydBjSZmxlbmd0aBkeBAAAAj5qdW1iAAAAJ2p1bWRjMmNsABEAEIAAAKoAOJtxA2MycGEuY2xhaW0udjIAAAACD2Nib3KlY2FsZ2ZzaGEyNTZpc2lnbmF0dXJleE1zZWxmI2p1bWJmPS9jMnBhL3VybjpjMnBhOmI3M2Q5N2RkLWNhMTUtNDIxMS05OGY4LTE0YzJiZGRjNGUyMC9jMnBhLnNpZ25hdHVyZWppbnN0YW5jZUlEeCx4bXA6aWlkOmZlNzJlYWUzLTVhYmUtNDU4YS05OWJiLTBiYjBhNTg5ODFmY3JjcmVhdGVkX2Fzc2VydGlvbnODomN1cmx4LXNlbGYjanVtYmY9YzJwYS5hc3NlcnRpb25zL2MycGEuaW5ncmVkaWVudC52M2RoYXNoWCAXCJOENe/1t0i1uvsmhUXoFa4JQKNhUz9JoN7AHAUxBqJjdXJseCpzZWxmI2p1bWJmPWMycGEuYXNzZXJ0aW9ucy9jMnBhLmFjdGlvbnMudjJkaGFzaFgga9ohJ1IzWUtU9sa3s6VgIXyuyhODujx3Qy/VA9PejA6iY3VybHgpc2VsZiNqdW1iZj1jMnBhLmFzc2VydGlvbnMvYzJwYS5oYXNoLmRhdGFkaGFzaFggW7rNm3MAkkDRxFNbjyb5QWCck7AmJno/Z2w54JTJvsR0Y2xhaW1fZ2VuZXJhdG9yX2luZm+jZG5hbWVvQW50aHJvcGljIEZpbGVzZ3ZlcnNpb25lMS4wLjBrc3BlY1ZlcnNpb25lMi40LjAAABA4anVtYgAAAChqdW1kYzJjcwARABCAAACqADibcQNjMnBhLnNpZ25hdHVyZQAAABAIY2JvctKEWQISogEmGCFZAgowggIGMIIBjaADAgECAhRA5aAK7sI50L64g/oGQgU9Z1UTADAKBggqhkjOPQQDAzBJMRcwFQYDVQQKEw5BbnRocm9waWMsIFBCQzEuMCwGA1UEAxMlQW50aHJvcGljIENvbnRlbnQgQ3JlZGVudGlhbHMgUm9vdCBDQTAeFw0yNjA4MDcxODQzNTZaFw0yODA4MDYxOTQzNTZaMEQxFzAVBgNVBAoTDkFudGhyb3BpYywgUEJDMSkwJwYDVQQDEyBBbnRocm9waWMgQ2xhdWRlIENvbnRlbnQgU2lnbmluZzBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABJh6CmvLUBgFFNU0vUKlOVtE6djd17L5SuwX0LemFisBM3dkd/3cyjxFA3Qo5S46fX0/ihY0VZ7mfb9KF703t5OjWDBWMA4GA1UdDwEB/wQEAwIHgDAVBgNVHSUEDjAMBgorBgEEAYPoXgIBMAwGA1UdEwEB/wQCMAAwHwYDVR0jBBgwFoAUzlHiBIFOZFsj+OPEz5o+nMHXXMIwCgYIKoZIzj0EAwMDZwAwZAIwMXMdFJ4BetLLVY7ORuE9noqbbAZOZn/aArXyTwFAZfKrPzxF2vPoJNf1+UCdg1XGAjBwX1zd9WGqYkqmL5SFqw1QySjr1zJfpJM9+1rdDwSPLMOPOjKuiXjoU/pUUeG9RwmhY3BhZFkNngAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPZYQLwcCC6iczBYRw7N5n5n2cbtKLLWwrhvvSW//zNVqbAOxQDkzxfWaE2XED+q8hvkH8rbN/EyVuiaQFDx7YM5NVk=</c2pa:manifest></metadata>
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#333"/>
+    </marker>
+  </defs>
+  <style>
+    .box { fill:#fff; stroke:#444; stroke-width:1.5; }
+    .grp { fill:none; stroke:#888; stroke-width:1.3; stroke-dasharray:8 5; }
+    .t  { font-size:14px; font-weight:bold; fill:#222; text-anchor:middle; }
+    .s  { font-size:11px; fill:#555; text-anchor:middle; }
+    .l  { font-size:12px; fill:#333; }
+    .h  { font-size:12px; font-weight:bold; fill:#333; }
+    .a  { stroke:#333; stroke-width:1.6; fill:none; marker-end:url(#arr); }
+    .d  { stroke:#777; stroke-width:1.4; fill:none; stroke-dasharray:5 4; marker-end:url(#arr); }
+    .n  { fill:#333; }
+    .nt { font-size:11px; font-weight:bold; fill:#fff; text-anchor:middle; }
+  </style>
+
+  <rect width="1700" height="1090" fill="#fff"/>
+
+  <!-- TOP ROW -->
+  <rect class="box" x="40" y="24" width="150" height="60" rx="6"/>
+  <text class="t" x="115" y="50">Developer</text>
+  <text class="s" x="115" y="69">WSL + VS Code</text>
+
+  <rect class="box" x="260" y="24" width="250" height="60" rx="6"/>
+  <text class="t" x="385" y="50">GitHub repository</text>
+  <text class="s" x="385" y="69">code, Terraform, manifests</text>
+
+  <rect class="box" x="730" y="24" width="180" height="60" rx="6"/>
+  <text class="t" x="820" y="50">Users</text>
+  <text class="s" x="820" y="69">web browser</text>
+
+  <rect class="box" x="1230" y="24" width="230" height="60" rx="6"/>
+  <text class="t" x="1345" y="50">Terraform</text>
+  <text class="s" x="1345" y="69">Jenkins-Server-TF + EKS-TF</text>
+
+  <!-- AWS CLOUD -->
+  <rect class="grp" x="20" y="110" width="1660" height="930" rx="10"/>
+  <text class="h" x="40" y="136" style="font-size:15px">AWS Cloud | ap-south-1 (Mumbai)</text>
+
+  <!-- Default VPC -->
+  <rect class="grp" x="40" y="150" width="520" height="520" rx="8"/>
+  <text class="h" x="60" y="171">Default VPC (Jenkins-Server-TF)</text>
+
+  <rect class="box" x="60" y="185" width="480" height="470" rx="6"/>
+  <text class="h" x="80" y="210" style="font-size:13px">Jenkins server | EC2 t3.large, Ubuntu 22.04</text>
+
+  <g class="l">
+    <rect class="box" x="70" y="235" width="300" height="44" rx="4"/><text x="82" y="262">1  Checkout from GitHub</text>
+    <rect class="box" x="70" y="291" width="300" height="44" rx="4"/><text x="82" y="318">2  SonarQube analysis + Quality Gate</text>
+    <rect class="box" x="70" y="347" width="300" height="44" rx="4"/><text x="82" y="374">3  npm install</text>
+    <rect class="box" x="70" y="403" width="300" height="44" rx="4"/><text x="82" y="430">4  Trivy file scan (Dep-Check optional)</text>
+    <rect class="box" x="70" y="459" width="300" height="44" rx="4"/><text x="82" y="486">5  Docker build</text>
+    <rect class="box" x="70" y="515" width="300" height="44" rx="4"/><text x="82" y="542">6  Push to ECR + Trivy image scan</text>
+    <rect class="box" x="70" y="571" width="300" height="44" rx="4"/><text x="82" y="598">7  Update image tag, git push</text>
+  </g>
+  <g class="a">
+    <line x1="220" y1="279" x2="220" y2="291"/>
+    <line x1="220" y1="335" x2="220" y2="347"/>
+    <line x1="220" y1="391" x2="220" y2="403"/>
+    <line x1="220" y1="447" x2="220" y2="459"/>
+    <line x1="220" y1="503" x2="220" y2="515"/>
+    <line x1="220" y1="559" x2="220" y2="571"/>
+  </g>
+
+  <!-- SonarQube + Trivy -->
+  <rect class="box" x="400" y="285" width="130" height="56" rx="6"/>
+  <text class="t" x="465" y="310" style="font-size:12px">SonarQube 9.9</text>
+  <text class="s" x="465" y="327" style="font-size:10px">Docker, port 9000</text>
+  <line class="d" x1="370" y1="313" x2="400" y2="313"/>
+
+  <rect class="box" x="400" y="400" width="130" height="56" rx="6"/>
+  <text class="t" x="465" y="425" style="font-size:12px">Trivy</text>
+  <text class="s" x="465" y="442" style="font-size:10px">files + images</text>
+  <line class="d" x1="370" y1="425" x2="400" y2="425"/>
+
+  <!-- ECR -->
+  <rect class="box" x="40" y="700" width="520" height="90" rx="6"/>
+  <text class="t" x="300" y="735">Amazon ECR</text>
+  <text class="s" x="300" y="758" style="font-size:12px">private repositories: frontend, backend</text>
+  <text class="s" x="300" y="776">image tag = Jenkins build number</text>
+
+  <!-- Delivery flow -->
+  <rect class="box" x="40" y="820" width="520" height="200" rx="6"/>
+  <text class="h" x="60" y="846" style="font-size:13px">Delivery flow</text>
+  <g class="l">
+    <text x="60" y="870">1  Developer pushes code to GitHub</text>
+    <text x="60" y="891">2  Jenkins checks out the repo and runs the pipeline</text>
+    <text x="60" y="912">3  Image is built, scanned and pushed to ECR</text>
+    <text x="60" y="933">4  Pipeline commits the new image tag to GitHub</text>
+    <text x="60" y="954">5  ArgoCD detects the commit and syncs the cluster</text>
+    <text x="60" y="975">6  Nodes pull the new image from ECR</text>
+    <text x="60" y="996">7  Users reach the app through the load balancer</text>
+  </g>
+
+  <!-- App VPC -->
+  <rect class="grp" x="640" y="150" width="1020" height="860" rx="8"/>
+  <text class="h" x="1000" y="171">VPC three-tier-eks-vpc  10.1.0.0/16  (EKS-TF)</text>
+
+  <!-- Public subnets -->
+  <rect class="grp" x="660" y="190" width="980" height="110" rx="6"/>
+  <text class="h" x="1000" y="212" style="font-size:11px">Public subnets (2 AZs)</text>
+  <rect class="box" x="700" y="225" width="240" height="56" rx="6"/>
+  <text class="t" x="820" y="249" style="font-size:13px">Application Load Balancer</text>
+  <text class="s" x="820" y="267" style="font-size:10px">internet-facing, Ingress class alb</text>
+  <rect class="box" x="1000" y="225" width="200" height="56" rx="6"/>
+  <text class="t" x="1100" y="249" style="font-size:12px">NAT gateway</text>
+  <text class="s" x="1100" y="267" style="font-size:10px">single, shared (cost saving)</text>
+  <rect class="box" x="1260" y="225" width="170" height="56" rx="6"/>
+  <text class="t" x="1345" y="258" style="font-size:12px">Internet gateway</text>
+
+  <!-- EKS cluster -->
+  <rect class="grp" x="660" y="330" width="980" height="650" rx="6"/>
+  <text class="h" x="680" y="968">Amazon EKS 1.34 | three-tier-eks | private subnets | 3 x m7i-flex.large (Amazon Linux 2023)</text>
+
+  <!-- namespace three-tier -->
+  <rect class="grp" x="680" y="380" width="560" height="330" rx="6"/>
+  <text class="h" x="1230" y="402" text-anchor="end">namespace: three-tier</text>
+
+  <rect class="box" x="700" y="430" width="160" height="90" rx="6"/>
+  <text class="t" x="780" y="460">frontend</text>
+  <text class="s" x="780" y="479">React, port 3000</text>
+  <text class="s" x="780" y="497">2 replicas</text>
+
+  <rect class="box" x="890" y="430" width="160" height="90" rx="6"/>
+  <text class="t" x="970" y="460">backend</text>
+  <text class="s" x="970" y="479">Node/Express, 3500</text>
+  <text class="s" x="970" y="497">3 replicas</text>
+
+  <rect class="box" x="1080" y="430" width="140" height="90" rx="6"/>
+  <text class="t" x="1150" y="460">MongoDB</text>
+  <text class="s" x="1150" y="479">version 4.4.6</text>
+  <text class="s" x="1150" y="497">1 replica</text>
+
+  <rect class="box" x="890" y="560" width="160" height="66" rx="6"/>
+  <text class="t" x="970" y="581" style="font-size:11px">Secret mongo-sec</text>
+  <text class="s" x="970" y="598" style="font-size:10px">created with kubectl,</text>
+  <text class="s" x="970" y="612" style="font-size:10px">not stored in Git</text>
+
+  <rect class="box" x="1080" y="560" width="140" height="66" rx="6"/>
+  <text class="t" x="1150" y="586" style="font-size:12px">EBS gp3 volume</text>
+  <text class="s" x="1150" y="604">2 GiB PVC</text>
+
+  <!-- namespace argocd -->
+  <rect class="box" x="1260" y="380" width="360" height="120" rx="6"/>
+  <text class="t" x="1440" y="408" style="font-size:13px">namespace: argocd</text>
+  <text class="h" x="1440" y="432" text-anchor="middle">ArgoCD</text>
+  <text class="s" x="1440" y="451">Application: three-tier</text>
+  <text class="s" x="1440" y="469">auto-sync, prune, self-heal</text>
+
+  <!-- namespace monitoring -->
+  <rect class="box" x="1260" y="530" width="360" height="180" rx="6"/>
+  <text class="t" x="1440" y="558" style="font-size:13px">namespace: monitoring</text>
+  <text class="h" x="1440" y="586" text-anchor="middle">Prometheus + Grafana</text>
+  <text class="s" x="1440" y="605">kube-prometheus-stack (Helm)</text>
+  <text class="s" x="1440" y="630">Alert: BackendPodsUnavailable</text>
+  <text class="s" x="1440" y="655">UI through kubectl port-forward</text>
+  <text class="s" x="1440" y="680">dashboards: pods, nodes, namespace</text>
+
+  <!-- kube-system -->
+  <rect class="grp" x="680" y="740" width="940" height="110" rx="6"/>
+  <text class="h" x="700" y="764">namespace: kube-system</text>
+  <text class="l" x="700" y="792">AWS Load Balancer Controller (Helm, IAM role for service account)</text>
+  <text class="l" x="700" y="814">EBS CSI driver (storage)   |   CoreDNS   |   kube-proxy   |   VPC CNI</text>
+  <text class="l" x="700" y="836">Managed node group: min 2, max 4 nodes</text>
+
+  <!-- access note -->
+  <rect class="box" x="680" y="870" width="940" height="60" rx="6"/>
+  <text class="l" x="700" y="896">Operator access: kubectl port-forward to ArgoCD, Grafana and Prometheus (no public endpoints).</text>
+  <text class="l" x="700" y="916">Jenkins and SonarQube are reachable only from the author's IP through the security group.</text>
+
+  <!-- ARROWS -->
+  <g class="a">
+    <line x1="190" y1="54" x2="260" y2="54"/>
+    <line x1="300" y1="84" x2="300" y2="185"/>
+    <line x1="300" y1="655" x2="300" y2="700"/>
+    <path d="M370 593 L585 593 L585 54 L510 54"/>
+    <path d="M1500 380 L1500 97 L480 97 L480 84"/>
+    <line x1="560" y1="745" x2="660" y2="745"/>
+    <line x1="820" y1="84" x2="820" y2="225"/>
+    <line x1="760" y1="281" x2="780" y2="430"/>
+    <line x1="900" y1="281" x2="970" y2="430"/>
+    <line x1="1050" y1="475" x2="1080" y2="475"/>
+    <line x1="1150" y1="520" x2="1150" y2="560"/>
+  </g>
+  <g class="d">
+    <line x1="1345" y1="84" x2="1345" y2="150"/>
+    <line x1="970" y1="560" x2="970" y2="520"/>
+    <line x1="1260" y1="440" x2="1240" y2="440"/>
+    <line x1="1260" y1="620" x2="1240" y2="620"/>
+  </g>
+
+  <!-- arrow labels -->
+  <text class="l" x="765" y="360" text-anchor="end" style="font-size:11px">/</text>
+  <text class="l" x="960" y="360" style="font-size:11px">/api</text>
+  <text class="l" x="1355" y="125" style="font-size:10px">provisions VPC, EKS, nodes, Jenkins server</text>
+  <text class="l" x="1005" y="90" text-anchor="middle" style="font-size:10px">polls repo</text>
+  <text class="l" x="575" y="330" text-anchor="middle" transform="rotate(-90 575 330)" style="font-size:10px">new image tag</text>
+
+  <!-- step markers -->
+  <g>
+    <circle class="n" cx="225" cy="54" r="10"/><text class="nt" x="225" y="58">1</text>
+    <circle class="n" cx="320" cy="130" r="10"/><text class="nt" x="320" y="134">2</text>
+    <circle class="n" cx="320" cy="677" r="10"/><text class="nt" x="320" y="681">3</text>
+    <circle class="n" cx="585" cy="200" r="10"/><text class="nt" x="585" y="204">4</text>
+    <circle class="n" cx="1100" cy="97" r="10"/><text class="nt" x="1100" y="101">5</text>
+    <circle class="n" cx="610" cy="722" r="10"/><text class="nt" x="610" y="726">6</text>
+    <circle class="n" cx="842" cy="150" r="10"/><text class="nt" x="842" y="154">7</text>
+  </g>
+
+  <!-- title -->
+  <text class="t" x="850" y="1068" style="font-size:16px">Three-tier DevSecOps on AWS EKS | Terraform, Jenkins, SonarQube, Trivy, ECR, ArgoCD, Prometheus, Grafana</text>
+</svg>
 
 ## Repository layout
 
