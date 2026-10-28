@@ -1,0 +1,18 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: three-tier-alerts
+  namespace: monitoring
+  labels:
+    release: monitoring
+spec:
+  groups:
+    - name: three-tier
+      rules:
+        - alert: BackendPodsUnavailable
+          expr: kube_deployment_status_replicas_available{namespace="three-tier",deployment="backend"} < 2
+          for: 1m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Backend has fewer than 2 available replicas"
